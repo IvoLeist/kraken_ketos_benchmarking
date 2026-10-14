@@ -1,0 +1,18 @@
+# Allowlist: data, credentials, Git state and host environments never enter builds.
+**
+!Dockerfile
+!.dockerignore
+!pyproject.toml
+!uv.lock
+!.python-version
+!Makefile
+!zensical.toml
+!README.md
+!scripts/
+!scripts/**
+!tests/
+!tests/**
+!docs/
+!docs/**
+**/__pycache__/
+**/*.pyc

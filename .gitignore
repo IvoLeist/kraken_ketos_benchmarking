@@ -1,0 +1,12 @@
+training_data/
+.venv/
+__pycache__/
+.pytest_cache/
+.cache/
+*.pyc
+artifacts/
+site/
+.DS_Store
+
+.env
+.docker-cache/

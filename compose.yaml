@@ -1,0 +1,47 @@
+x-runtime: &runtime
+  image: ketos-benchmarking:local
+  build:
+    context: .
+  user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+  hostname: "${BENCHMARK_HOSTNAME:-ketos-benchmarking}"
+  shm_size: "${SHM_SIZE:-2gb}"
+  stop_grace_period: 30s
+  volumes:
+    - type: bind
+      source: ${TRAINING_DATA_DIR:-./training_data}
+      target: /app/training_data
+      read_only: true
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${ARTIFACTS_DIR:-./artifacts/docker}
+      target: /app/artifacts
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${CACHE_DIR:-./.docker-cache}
+      target: /cache
+      bind:
+        create_host_path: false
+    - type: bind
+      source: ${SITE_DIR:-./site}
+      target: /app/site
+      bind:
+        create_host_path: false
+
+services:
+  benchmark:
+    <<: *runtime
+    command: ["make", "help"]
+  docs:
+    <<: *runtime
+    profiles: ["docs"]
+    command: ["make", "docs-serve", "DOCS_ADDRESS=0.0.0.0:8000"]
+    ports:
+      - "127.0.0.1:${DOCS_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=2).read(1)"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3

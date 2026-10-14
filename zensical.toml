@@ -1,0 +1,17 @@
+[project]
+site_name = "Ketos benchmarking"
+site_description = "Reproducible Kraken PP-OCRv6 tiny CPU and memory benchmarks"
+docs_dir = "docs"
+site_dir = "site"
+nav = [
+  { "Overview" = "index.md" },
+  { "Running benchmarks" = "benchmarks.md" },
+  { "Docker deployment" = "docker.md" },
+  { "Measurement methodology" = "methodology.md" },
+  { "Results" = "results.md" },
+  { "GitHub Pages" = "publishing.md" },
+]
+
+[project.theme]
+language = "en"
+features = ["navigation.sections", "content.code.copy"]
