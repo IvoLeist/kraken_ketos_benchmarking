@@ -42,11 +42,14 @@ def main():
     subprocess.run([sys.executable, '-m', 'scripts.benchmark', '--datasets', str(datasets),
                     '--output', str(runs), '--sizes', '1', '--workers', '1', '--threads', '1',
                     '--batch-sizes', '2', '--epochs', '3', '--max-width', '512',
-                    '--torch-compile', 'disabled', '--optimizer', 'AdamW'], check=True)
+                    '--optimizer', 'AdamW'], check=True)
     summary_path, = runs.glob('*/summary.json')
     summary = json.loads(summary_path.read_text())
     if summary['returncode'] != 0 or summary['interrupted']:
         raise RuntimeError('Container training check did not complete')
+    assert summary['torch_compile'] == 'disabled'
+    for flag in ('TORCHDYNAMO_DISABLE', 'TORCH_COMPILE_DISABLE'):
+        assert summary['environment'][flag] == '1'
     log = (summary_path.parent / 'process.log').read_text()
     if 'max_epochs=3' not in log or not list(summary_path.parent.glob('checkpoints/*.safetensors')):
         raise RuntimeError('Three-epoch completion or exported weights missing')

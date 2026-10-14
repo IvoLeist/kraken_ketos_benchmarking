@@ -21,6 +21,8 @@ WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     UV_CACHE_DIR=/root/.cache/uv uv sync --locked --group docs --no-managed-python
+# Match Galaxy; the second flag is read by the pinned PyTorch version.
+ENV TORCHDYNAMO_DISABLE=1 TORCH_COMPILE_DISABLE=1
 COPY Makefile zensical.toml README.md ./
 COPY scripts/ scripts/
 COPY tests/ tests/

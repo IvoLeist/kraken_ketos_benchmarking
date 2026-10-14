@@ -128,3 +128,20 @@ def test_sigterm_preserves_interrupted_summary(tmp_path):
         if process.poll() is None:
             process.terminate()
             process.wait(timeout=15)
+
+
+@pytest.mark.parametrize('mode,expected', [(None, '1'), ('enabled', '0')])
+def test_training_compilation_environment(monkeypatch, capsys, mode, expected):
+    from scripts import benchmark
+
+    for flag in ('TORCHDYNAMO_DISABLE', 'TORCH_COMPILE_DISABLE'):
+        monkeypatch.setenv(flag, '0' if expected == '1' else '1')
+    argv = ['benchmark', '--dry-run', '--sizes', '5', '--workers', '0',
+            '--threads', '1', '--batch-sizes', '4']
+    if mode:
+        argv += ['--torch-compile', mode]
+    monkeypatch.setattr(sys, 'argv', argv)
+    benchmark.main()
+    command = capsys.readouterr().out
+    assert f'TORCHDYNAMO_DISABLE={expected}' in command
+    assert f'TORCH_COMPILE_DISABLE={expected}' in command

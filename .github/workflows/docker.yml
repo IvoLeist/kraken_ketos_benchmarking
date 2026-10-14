@@ -30,4 +30,6 @@ jobs:
           docker run --rm ketos-benchmarking:ci make dry-run SIZES=5 WORKERS=0 THREADS=1 BATCH_SIZES=4
           docker run --rm ketos-benchmarking:ci make docs
       - name: Compose configuration
-        run: docker compose config --quiet
+        run: |
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.limits.yaml config --quiet

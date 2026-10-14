@@ -71,18 +71,35 @@ Use the same `BENCHMARK_HOSTNAME` for repeated invocations on one machine; choos
 
 The image is CPU-only. Merely setting `DEVICE=cuda:0` does not add GPU support. The Compose services allocate a 2 GiB shared-memory ceiling for worker communication; increase `SHM_SIZE` if worker processes exhaust it. This is a ceiling, not a reservation of physical RAM.
 
-For controlled resource comparisons, create `compose.limits.yaml`, adapting the CPU numbers and memory to your machine:
+The supplied `compose.limits.yaml` is sized conservatively for the shared KVM VM with 12 vCPUs and 31 GiB RAM:
 
-```yaml
-services:
-  benchmark:
-    cpuset: "0-3"
-    mem_limit: 8g
+| Service | CPU allowance | Hard RAM ceiling | Swap | Process/thread ceiling |
+| --- | --- | --- | --- | --- |
+| Benchmark | CPUs 0–3, at most 4 CPU equivalents | 8 GiB | Disabled | 512 |
+| Documentation preview | CPU 4, at most 1 CPU equivalent | 1 GiB | Disabled | 128 |
+
+With one of each container running, at least 22 GiB of the VM's RAM remains outside these ceilings, and the containers cannot use CPUs 5–11. CPU affinity does not reserve CPUs exclusively; other VM workloads can still compete on CPUs 0–4. The benchmark's 2 GiB shared-memory ceiling is **included** in its 8 GiB RAM limit. Equal `mem_limit` and `memswap_limit` disable container swap, avoiding benchmark-driven swap thrashing. OOM killing remains enabled: an oversized run can fail inside its container. Docker console logs rotate at 10 MiB with three files.
+
+**Activate the override for every invocation** (it is not loaded automatically):
+
+```sh
+export COMPOSE_FILE=compose.yaml:compose.limits.yaml
+docker compose config --quiet
+docker compose run --rm benchmark make datasets
+docker compose run --rm benchmark make benchmark
+docker compose run --rm benchmark make plots
+# The same exported setting also applies to make docker-run and docker-docs.
 ```
+
+Alternatively, use explicit file arguments:
 
 ```sh
 docker compose -f compose.yaml -f compose.limits.yaml run --rm benchmark make benchmark
 ```
+
+Start with `SIZES=5 WORKERS=0 THREADS=1 BATCH_SIZES=4` if checking a new dataset. Worker/thread combinations still share the same four CPUs; large batches can hit the RAM ceiling. Reduce batch size or workers if a run is killed, rather than removing the limit.
+
+These are per-container limits: run only one benchmark container at a time. They constrain runtime containers, not image builds or native Python commands. They cannot guarantee VM stability if unrelated workloads exhaust resources. Check free disk space as checkpoints and files in `artifacts/` and caches are not capped by these limits; Docker log rotation does not rotate benchmark output files. Retain the override with your results and use a separate results directory when changing limits.
 
 CPU utilization is normalized to affinity-visible logical CPUs, so CPU pinning with `cpuset` is reflected in the denominator. Cgroup CPU quotas (`cpus`) and Docker Desktop VM limits may be narrower and are not used in that denominator. Report the container limits and host/VM configuration with results. Process RSS is not the entire container's cgroup memory usage; container OOM termination can prevent final summaries from being written.
 
@@ -117,3 +134,5 @@ The documentation preview listens on the container network interface but is publ
 A Docker validation workflow builds the image, runs the harness tests, checks a tiny synthetic three-epoch training pipeline, checks the benchmark command, and builds documentation on pushes and pull requests. It does not publish an image or launch the full training matrix.
 
 References: [uv Docker integration](https://docs.astral.sh/uv/guides/integration/docker/), [Docker Compose services](https://docs.docker.com/reference/compose-file/services/).
+
+The image and benchmark runner disable TorchDynamo by default with `TORCHDYNAMO_DISABLE=1` and `TORCH_COMPILE_DISABLE=1`, matching Galaxy. Training commands enforce and record both flags. Use `TORCH_COMPILE=enabled` only when explicitly benchmarking compilation.

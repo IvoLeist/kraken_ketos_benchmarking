@@ -39,13 +39,14 @@ def main():
     p.add_argument('--datasets', type=Path, default=Path('artifacts/datasets'))
     p.add_argument('--output', type=Path, default=Path('artifacts/runs'))
     p.add_argument('--sizes', nargs='+', type=int, default=[5, 10, 15])
-    p.add_argument('--workers', nargs='+', type=int, default=[0, 2, 4])
+    p.add_argument('--workers', nargs='+', type=int, default=[0, 1, 2, 4])
     p.add_argument('--threads', nargs='+', type=int, default=[1, 2, 4])
     p.add_argument('--batch-sizes', nargs='+', type=int, default=[4, 8, 16])
     p.add_argument('--precisions', nargs='+', default=['32-true'])
     p.add_argument('--device', default='cpu')
-    p.add_argument('--optimizer', choices=['Adam', 'AdamW', 'AdamW+Muon', 'SGD', 'RMSprop'], default='AdamW')
-    p.add_argument('--torch-compile', choices=['enabled', 'disabled'], default='enabled')
+    p.add_argument('--optimizer', default='AdamW')
+    # p.add_argument('--optimizer', choices=['Adam', 'AdamW', 'AdamW+Muon', 'SGD', 'RMSprop'], default='AdamW')
+    p.add_argument('--torch-compile', choices=['enabled', 'disabled'], default='disabled')
     p.add_argument('--height', type=int, default=96)
     p.add_argument('--max-width', type=int, default=2560)
     p.add_argument('--epochs', type=int, default=3)
@@ -81,6 +82,7 @@ def main():
         overrides = dict(OMP_NUM_THREADS=str(threads), MKL_NUM_THREADS=str(threads),
                          OPENBLAS_NUM_THREADS=str(threads), NUMEXPR_NUM_THREADS=str(threads),
                          TOKENIZERS_PARALLELISM='false',
+                         TORCHDYNAMO_DISABLE='1' if args.torch_compile == 'disabled' else '0',
                          TORCH_COMPILE_DISABLE='1' if args.torch_compile == 'disabled' else '0')
         print(shlex.join([f'{k}={v}' for k, v in overrides.items()]) + ' ' + shlex.join(command), flush=True)
         if args.dry_run:

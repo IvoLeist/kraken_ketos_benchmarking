@@ -68,7 +68,7 @@ make benchmark WORKERS=2 THREADS=4 BATCH_SIZES=8 ACCUMULATE=2 PRECISIONS=32-true
 | `THREADS` | `1 2 4` | PyTorch intra-op and numerical-library thread limits |
 | `BATCH_SIZES` | `4 8 16` | Text-line examples per batch |
 | `OPTIMIZER` | `AdamW` | Explicit CPU-friendly optimizer; `AdamW+Muon` selects Kraken’s PP-OCRv6 default |
-| `TORCH_COMPILE` | `enabled` | Torch model compilation; `disabled` skips compilation |
+| `TORCH_COMPILE` | `disabled` | Sets `TORCHDYNAMO_DISABLE=1` and `TORCH_COMPILE_DISABLE=1`; explicit `enabled` opts into compilation |
 | `HEIGHT`, `MAX_WIDTH` | `96`, `2560` | Normalized line height and maximum input width |
 | `SMOKE_MAX_WIDTH` | `512` | Reduced maximum width used only by the smoke target |
 | `EPOCHS` | `3` | Fixed epochs, with early stopping disabled |
@@ -125,3 +125,5 @@ uv.lock               Exact dependency resolution
 Dependencies are defined in `pyproject.toml` and installed with `uv sync --locked --group docs`. To deliberately upgrade, edit the version constraints, run `uv lock`, then repeat tests and a smoke benchmark. Python 3.14 is not supported by this Kraken release.
 
 References: [Kraken recognition training](https://kraken.re/main/user_guide/training_recognition.html), [Kraken on PyPI](https://pypi.org/project/kraken/7.1.1/), [Zensical publishing](https://zensical.org/docs/publish-your-site/).
+
+For the shared 12-vCPU / 31-GiB VM, enable the supplied resource limits before Docker runs: `export COMPOSE_FILE=compose.yaml:compose.limits.yaml`. The benchmark is capped at four CPUs and 8 GiB RAM with no swap. See [Docker resource limits](docs/docker.md#resource-limits-and-stopping).

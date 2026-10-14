@@ -24,7 +24,7 @@ The monitor runs outside the measured process tree. CPU utilization is **occupan
 - Repeats share the seed to measure runtime variability. Use three or more for useful error bars.
 - Dataset plots keep training settings and validation identity separate. Settings plots keep dataset identity and fixed experimental conditions separate.
 
-Keep the machine otherwise idle. Record power settings, CPU model, storage, available RAM and thermal conditions alongside any published report. Use separate output directories for different hosts or software environments. Torch compilation is enabled in the benchmark matrix and disabled for the smoke target. Initial compilation can dominate short runs; Torch compiler caches are not cleared between runs. Compare the two modes separately. Filesystem caches are not flushed, and there is no automatic warmup run; this represents normal repeated invocations. All runs, including the first, are included unless you isolate them in another directory.
+Keep the machine otherwise idle. Record power settings, CPU model, storage, available RAM and thermal conditions alongside any published report. Use separate output directories for different hosts or software environments. TorchDynamo compilation is disabled by default in the benchmark matrix, smoke target and Docker image, matching Galaxy (`TORCHDYNAMO_DISABLE=1`, plus `TORCH_COMPILE_DISABLE=1` for the pinned PyTorch). Initial compilation can dominate short runs; Torch compiler caches are not cleared between runs. Compare the two modes separately. Filesystem caches are not flushed, and there is no automatic warmup run; this represents normal repeated invocations. All runs, including the first, are included unless you isolate them in another directory.
 
 ## Limits
 
