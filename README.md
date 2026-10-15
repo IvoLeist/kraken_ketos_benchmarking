@@ -4,7 +4,7 @@ Measure how training-set size, data-loader workers, CPU threads and batch size a
 
 ## Quick start
 
-Requires `uv`, GNU Make and Linux or macOS. `uv` creates `.venv` with Python 3.12; Kraken is installed from PyPI. The locked Linux/Windows PyTorch packages use the official CPU wheel index. The monitor requires POSIX process groups, so use WSL on Windows.
+Requires `uv`, GNU Make and Linux with delegated CPU/memory cgroups. `uv` creates `.venv` with Python 3.12; Kraken is installed from PyPI. The locked Linux/Windows PyTorch packages use the official CPU wheel index. This branch uses BenchExec for resource accounting; follow the [setup instructions](docs/benchmarks.md#benchexec-setup) before measured runs. On systemd hosts, run the dataset and benchmark commands below in a delegated scope as shown there.
 
 ```sh
 make setup
@@ -21,7 +21,7 @@ The existing `training_data/` directory remains ignored by Git. PAGE XML must re
 
 ## Docker
 
-Run the entire CPU suite without installing Python or uv on the host:
+Compose automatically prepares BenchExec's cgroups on Linux Docker Engine with cgroups v2 (kernel 5.19 or newer). The benchmark service briefly initializes its private cgroup hierarchy as root, then runs commands as your configured non-root user with capabilities removed. It uses Docker privileged mode for writable cgroups; see [runtime requirements and privileges](docs/docker.md#cgroup-setup-and-privileges).
 
 ```sh
 mkdir -p training_data artifacts/docker .docker-cache site
@@ -77,7 +77,6 @@ make benchmark WORKERS=2 THREADS=4 BATCH_SIZES=8 ACCUMULATE=2 PRECISIONS=32-true
 | `DEVICE` | `cpu` | Explicit compute device |
 | `ACCUMULATE` | `1` | Gradient accumulation; effective batch = batch × accumulation |
 | `SEED` | `42` | Dataset selection and training seed |
-| `INTERVAL` | `0.2` | Resource sampling interval, seconds |
 | `VALIDATION_PAGES` | `2` | Distinct held-out pages, outside the training counts |
 | `COMPILE_WORKERS`, `COMPILE_THREADS` | `1`, `1` | Compilation concurrency |
 | `DATA_DIR` | `training_data` | Source directory, scanned recursively |
@@ -89,7 +88,7 @@ CPU is the supported default. Selecting `DEVICE=cuda:0` also requires replacing 
 
 ## Results and interpretation
 
-Each run includes `command.json`, `process.log`, `samples.csv`, `summary.json`, checkpoints and training logs. `make plots` writes:
+Each run includes `command.json`, `process.log`, `benchexec.json`, `summary.json`, checkpoints and training logs. `make plots` writes:
 
 - `results.csv`: all run summaries, including failed runs and exit codes.
 - `dataset-vs-*.png` / `.svg`: Arrow size versus peak RAM, wall time and CPU utilization, one series per configuration.
@@ -98,7 +97,7 @@ Each run includes `command.json`, `process.log`, `samples.csv`, `summary.json`, 
 
 Only successful training runs enter plots. Repeated equivalent configurations show their mean and sample standard deviation. The smoke target disables Torch compilation and uses a reduced maximum width (512 pixels); it validates the pipeline and is not comparable to default-width benchmarks. For full-default verification, use `make benchmark SIZES=5 WORKERS=0 THREADS=1 BATCH_SIZES=4`. Keep smoke runs in a separate `RUNS` directory if you do not want them included in subsequent comparisons.
 
-**RAM** is sampled summed resident memory (RSS) of the training process and descendants; shared pages can be counted more than once. **CPU utilization** is sampled process-tree CPU time divided by wall time and the logical CPUs available through affinity. It measures occupancy, not computational efficiency or speedup; a faster run can use fewer CPU resources. Short-lived workers and peaks between samples may be missed. Cgroup CPU quotas are not accounted for. GPU memory is not measured. See [the methodology](docs/methodology.md).
+**RAM** is BenchExec's peak cgroup memory (`peak_memory_bytes`), not summed process RSS. **CPU utilization** is cgroup CPU time divided by wall time and affinity-visible logical CPUs; CPU quotas are not included in that denominator. Legacy sampled RSS results remain readable but are grouped separately in plots. There is no sampling interval or resource time series. See [the methodology](docs/methodology.md).
 
 ## Documentation and GitHub Pages
 
@@ -115,7 +114,7 @@ The Zensical site configuration is in `zensical.toml`. The GitHub Actions workfl
 ```text
 scripts/datasets.py   Pair validation, seeded subsets and measured compilation
 scripts/benchmark.py  Training commands and serial matrix execution
-scripts/monitor.py    Process-tree resource sampling
+scripts/monitor.py    BenchExec execution and provenance adapter
 scripts/plot.py       CSV export and PNG/SVG plots
 artifacts/            Generated data, runs and plots (ignored)
 docs/                 Zensical documentation source

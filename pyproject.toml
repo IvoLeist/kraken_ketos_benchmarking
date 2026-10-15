@@ -3,7 +3,14 @@ name = "ketos-benchmarking"
 version = "0.1.0"
 description = "Reproducible Kraken PP-OCRv6 tiny resource benchmarks"
 requires-python = ">=3.12,<3.13"
-dependencies = ["kraken==7.1.1", "psutil>=7,<8", "matplotlib>=3.10,<4", "torch>=2.9,<=2.14", "torchvision>=0.5"]
+dependencies = [
+    "kraken==7.1.1",
+    "psutil>=7,<8",
+    "matplotlib>=3.10,<4",
+    "torch>=2.9,<=2.14",
+    "torchvision>=0.5",
+    "benchexec>=3.34,<4",
+]
 
 [dependency-groups]
 dev = ["pytest>=8,<10"]

@@ -32,6 +32,16 @@ x-runtime: &runtime
 services:
   benchmark:
     <<: *runtime
+    # Writable cgroups are private to this container, never a host bind mount.
+    cgroup: private
+    privileged: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, SETPCAP]
+    user: "0:0"
+    environment:
+      BENCHEXEC_CGROUP_SETUP: "1"
+      LOCAL_UID: "${LOCAL_UID:-1000}"
+      LOCAL_GID: "${LOCAL_GID:-1000}"
     command: ["make", "help"]
   docs:
     <<: *runtime

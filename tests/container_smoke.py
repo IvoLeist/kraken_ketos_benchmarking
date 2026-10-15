@@ -3,6 +3,8 @@
 This checks deployment plumbing, not benchmark performance or OCR accuracy.
 """
 import json
+import os
+import shlex
 import subprocess
 import sys
 import uuid
@@ -13,6 +15,7 @@ from PIL import Image, ImageDraw
 
 
 def main():
+    prefix = shlex.split(os.environ.get('BENCHEXEC_PREFIX', ''))
     output = Path('artifacts') / f'container-check-{uuid.uuid4().hex[:10]}'
     source = output / 'input'
     source.mkdir(parents=True)
@@ -37,9 +40,9 @@ def main():
         image.save(source / f'{index}.jpg')
         ET.ElementTree(root).write(source / f'{index}.xml', encoding='utf-8', xml_declaration=True)
     datasets, runs, plots = (output / name for name in ('datasets', 'runs', 'plots'))
-    subprocess.run([sys.executable, '-m', 'scripts.datasets', '--source', str(source),
+    subprocess.run([*prefix, sys.executable, '-m', 'scripts.datasets', '--source', str(source),
                     '--output', str(datasets), '--sizes', '1', '--validation-pages', '1'], check=True)
-    subprocess.run([sys.executable, '-m', 'scripts.benchmark', '--datasets', str(datasets),
+    subprocess.run([*prefix, sys.executable, '-m', 'scripts.benchmark', '--datasets', str(datasets),
                     '--output', str(runs), '--sizes', '1', '--workers', '1', '--threads', '1',
                     '--batch-sizes', '2', '--epochs', '3', '--max-width', '512',
                     '--optimizer', 'AdamW'], check=True)

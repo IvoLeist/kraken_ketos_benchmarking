@@ -53,12 +53,11 @@ def main():
     p.add_argument('--repeats', type=int, default=1)
     p.add_argument('--seed', type=int, default=42)
     p.add_argument('--accumulate', type=int, default=1)
-    p.add_argument('--interval', type=float, default=0.2)
     p.add_argument('--dry-run', action='store_true')
     args = p.parse_args()
     if (min(args.sizes + args.threads + args.batch_sizes + [args.epochs, args.repeats, args.accumulate, args.height, args.max_width]) < 1
-            or min(args.workers) < 0 or args.interval <= 0):
-        p.error('Sizes/threads/batches/epochs/repeats/accumulation/interval must be positive; workers >= 0')
+            or min(args.workers) < 0):
+        p.error('Sizes/threads/batches/epochs/repeats/accumulation must be positive; workers >= 0')
     ketos = Path(sys.executable).parent / 'ketos'
     records = None
     if not args.dry_run:
@@ -94,8 +93,8 @@ def main():
                          dataset_bytes=records[str(pages)]['bytes'],
                          dataset_lines=records[str(pages)].get('lines'),
                          dataset_sha256=records[str(pages)]['sha256'],
-                         validation_sha256=records['validation']['sha256']), args.interval, env)
-        failures += result['returncode'] != 0
+                         validation_sha256=records['validation']['sha256']), env=env)
+        failures += result['returncode'] != 0 or bool(result.get('termination_reason'))
         print(f'Exit {result["returncode"]}; {result["wall_seconds"]:.1f}s; log: {run / "process.log"}', flush=True)
     if failures:
         raise SystemExit(f'{failures} training runs failed; see their process.log files')

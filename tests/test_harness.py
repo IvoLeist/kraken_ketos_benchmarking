@@ -46,31 +46,6 @@ def test_matrix_and_fixed_epoch_command(tmp_path):
     assert '--evaluation-data' in cmd
 
 
-def test_monitor_records_success_and_failure(tmp_path):
-    for code in (0, 7):
-        run = tmp_path / str(code)
-        result = measure([sys.executable, '-c', f'import time; x=bytearray(1000000); time.sleep(.15); raise SystemExit({code})'],
-                         run, {'kind': 'test'}, interval=.02)
-        assert result['returncode'] == code
-        assert result['wall_seconds'] >= .15
-        assert result['peak_rss_bytes'] > 0
-        assert json.loads((run / 'summary.json').read_text())['returncode'] == code
-        assert (run / 'samples.csv').read_text().count('\n') > 2
-
-
-def test_monitor_includes_worker_memory(tmp_path):
-    code = ('import subprocess,sys,time; '
-            'p=subprocess.Popen([sys.executable,"-c",'
-            '"import time; x=bytearray(32000000); time.sleep(.4)"]); '
-            'p.wait()')
-    result = measure([sys.executable, '-c', code], tmp_path / 'tree', {'kind': 'test'}, interval=.02)
-    assert result['returncode'] == 0
-    assert result['peak_rss_bytes'] > 32_000_000
-    import csv
-    with (tmp_path / 'tree' / 'samples.csv').open() as f:
-        assert max(int(r['processes']) for r in csv.DictReader(f)) >= 2
-
-
 def test_plot_export_keeps_failed_runs(tmp_path, monkeypatch):
     from scripts import plot
     run = tmp_path / 'runs' / 'failed'
@@ -84,7 +59,8 @@ def test_plot_export_keeps_failed_runs(tmp_path, monkeypatch):
     assert not list(output.glob('*.png'))
 
 
-def test_plots_for_successful_repeats(tmp_path):
+@pytest.mark.parametrize('mixed', [False, True])
+def test_plots_for_successful_repeats(tmp_path, mixed):
     from scripts.plot import plot_training
     base = dict(workers=0, threads=1, batch_size=4, precision='32-true', device='cpu',
                 epochs=3, accumulate=1, seed=42, validation_sha256='validation',
@@ -92,42 +68,14 @@ def test_plots_for_successful_repeats(tmp_path):
                 hostname='test', lock_sha256='lock', torch_compile='disabled', optimizer='AdamW', height=96, max_width=2560, pages=5, dataset_bytes=1024,
                 dataset_sha256='training', peak_rss_bytes=1024**2,
                 wall_seconds=1.0, cpu_utilization_pct=50.0)
-    plot_training([base, dict(base, wall_seconds=2.0)], tmp_path)
-    assert len(list(tmp_path.glob('*.png'))) == 4
-    assert len(list(tmp_path.glob('*.svg'))) == 4
-
-
-def test_sigterm_preserves_interrupted_summary(tmp_path):
-    import subprocess
-    import time
-
-    run = tmp_path / 'terminated'
-    code = ('from scripts.monitor import measure; import sys; '
-            f'measure([sys.executable,"-c","import time; time.sleep(60)"], '
-            f'{str(run)!r}, {{"kind":"test"}}, interval=.02)')
-    process = subprocess.Popen([sys.executable, '-c', code],
-                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    try:
-        deadline = time.monotonic() + 10
-        while time.monotonic() < deadline:
-            samples = run / 'samples.csv'
-            if samples.exists() and len(samples.read_text().splitlines()) > 1:
-                break
-            if process.poll() is not None:
-                pytest.fail('Monitor exited before receiving SIGTERM')
-            time.sleep(.02)
-        else:
-            pytest.fail('Monitor did not start sampling')
-        process.terminate()
-        process.wait(timeout=15)
-        summary = json.loads((run / 'summary.json').read_text())
-        assert summary['interrupted'] is True
-        assert summary['returncode'] is not None
-        assert process.returncode != 0
-    finally:
-        if process.poll() is None:
-            process.terminate()
-            process.wait(timeout=15)
+    second = dict(base, wall_seconds=2.0)
+    if mixed:
+        second.pop('peak_rss_bytes')
+        second.update(peak_memory_bytes=2**21, memory_measurement='cgroup')
+    plot_training([base, second], tmp_path)
+    # A mixed measurement method must get a separate settings panel.
+    assert len(list(tmp_path.glob('*.png'))) == (5 if mixed else 4)
+    assert len(list(tmp_path.glob('*.svg'))) == (5 if mixed else 4)
 
 
 @pytest.mark.parametrize('mode,expected', [(None, '1'), ('enabled', '0')])

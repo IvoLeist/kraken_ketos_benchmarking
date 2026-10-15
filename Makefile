@@ -2,6 +2,7 @@
 UV ?= uv
 export MPLCONFIGDIR ?= $(CURDIR)/.cache/matplotlib
 PYTHON := .venv/bin/python
+BENCHEXEC_PREFIX ?=
 DOCS_ADDRESS ?= 127.0.0.1:8000
 DATA_DIR ?= training_data
 DATASETS ?= artifacts/datasets
@@ -25,8 +26,7 @@ SEED ?= 42
 ACCUMULATE ?= 1
 COMPILE_WORKERS ?= 1
 COMPILE_THREADS ?= 1
-INTERVAL ?= 0.2
-BENCH_ARGS = --datasets "$(DATASETS)" --output "$(RUNS)" --sizes $(SIZES) --workers $(WORKERS) --threads $(THREADS) --batch-sizes $(BATCH_SIZES) --precisions $(PRECISIONS) --device "$(DEVICE)" --optimizer "$(OPTIMIZER)" --torch-compile $(TORCH_COMPILE) --height $(HEIGHT) --max-width $(MAX_WIDTH) --epochs $(EPOCHS) --repeats $(REPEATS) --seed $(SEED) --accumulate $(ACCUMULATE) --interval $(INTERVAL)
+BENCH_ARGS = --datasets "$(DATASETS)" --output "$(RUNS)" --sizes $(SIZES) --workers $(WORKERS) --threads $(THREADS) --batch-sizes $(BATCH_SIZES) --precisions $(PRECISIONS) --device "$(DEVICE)" --optimizer "$(OPTIMIZER)" --torch-compile $(TORCH_COMPILE) --height $(HEIGHT) --max-width $(MAX_WIDTH) --epochs $(EPOCHS) --repeats $(REPEATS) --seed $(SEED) --accumulate $(ACCUMULATE)
 
 .PHONY: help setup check-env datasets benchmark dry-run smoke plots test docs docs-serve all
 help:
@@ -36,13 +36,13 @@ setup:
 check-env:
 	@test -x "$(PYTHON)" || (echo 'Run make setup first'; exit 1)
 datasets: check-env
-	$(PYTHON) -m scripts.datasets --source "$(DATA_DIR)" --output "$(DATASETS)" --sizes $(SIZES) --validation-pages $(VALIDATION_PAGES) --seed $(SEED) --workers $(COMPILE_WORKERS) --threads $(COMPILE_THREADS)
+	$(BENCHEXEC_PREFIX) $(PYTHON) -m scripts.datasets --source "$(DATA_DIR)" --output "$(DATASETS)" --sizes $(SIZES) --validation-pages $(VALIDATION_PAGES) --seed $(SEED) --workers $(COMPILE_WORKERS) --threads $(COMPILE_THREADS)
 benchmark: check-env
-	$(PYTHON) -m scripts.benchmark $(BENCH_ARGS)
+	$(BENCHEXEC_PREFIX) $(PYTHON) -m scripts.benchmark $(BENCH_ARGS)
 dry-run: check-env
-	$(PYTHON) -m scripts.benchmark $(BENCH_ARGS) --dry-run
+	$(BENCHEXEC_PREFIX) $(PYTHON) -m scripts.benchmark $(BENCH_ARGS) --dry-run
 smoke: check-env
-	$(PYTHON) -m scripts.benchmark --datasets "$(DATASETS)" --output "$(RUNS)" --sizes 5 --workers 0 --threads 1 --batch-sizes 4 --epochs 3 --max-width $(SMOKE_MAX_WIDTH) --torch-compile disabled --device "$(DEVICE)"
+	$(BENCHEXEC_PREFIX) $(PYTHON) -m scripts.benchmark --datasets "$(DATASETS)" --output "$(RUNS)" --sizes 5 --workers 0 --threads 1 --batch-sizes 4 --epochs 3 --max-width $(SMOKE_MAX_WIDTH) --torch-compile disabled --device "$(DEVICE)"
 plots: check-env
 	$(PYTHON) -m scripts.plot --input "$(RUNS)" --datasets "$(DATASETS)" --output "$(PLOTS)"
 test: check-env
@@ -71,4 +71,4 @@ docker-down:
 
 .PHONY: integration-test
 integration-test: check-env
-	$(PYTHON) tests/container_smoke.py
+	BENCHEXEC_PREFIX="$(BENCHEXEC_PREFIX)" $(PYTHON) tests/container_smoke.py

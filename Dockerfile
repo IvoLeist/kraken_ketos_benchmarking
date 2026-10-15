@@ -4,7 +4,7 @@ FROM python:3.12-slim-bookworm
 
 # g++ is required at runtime by CPU torch.compile / TorchInductor.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libgomp1 ca-certificates tini \
+    && apt-get install -y --no-install-recommends build-essential libgomp1 ca-certificates tini util-linux \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=uv /uv /usr/local/bin/uv
 ENV UV_PYTHON_DOWNLOADS=never \
@@ -36,5 +36,5 @@ RUN groupadd --gid 1000 benchmark \
 USER 1000:1000
 EXPOSE 8000
 # Forward stop signals to the command group; reap orphaned loader workers.
-ENTRYPOINT ["tini", "-g", "--"]
+ENTRYPOINT ["/usr/local/bin/python3", "/app/scripts/container_entrypoint.py"]
 CMD ["make", "help"]

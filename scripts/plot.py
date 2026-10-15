@@ -11,7 +11,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 
-METRICS = [('peak_rss_bytes', 'Peak process-tree RSS (MiB)', 2**20),
+METRICS = [('peak_memory_bytes', 'Peak memory (MiB; accounting shown in legend)', 2**20),
            ('wall_seconds', 'Wall time (s)', 1),
            ('cpu_utilization_pct', 'Available CPU utilization (%)', 1)]
 
@@ -26,11 +26,14 @@ def load_results(root):
 
 
 def plot_training(rows, output):
+    # Legacy sampled RSS and cgroup memory have different semantics: never pool them.
+    rows = [dict(r, peak_memory_bytes=r.get('peak_memory_bytes', r.get('peak_rss_bytes')),
+                 memory_measurement=r.get('memory_measurement', 'sampled RSS')) for r in rows]
     groups = defaultdict(list)
     fields = ('workers', 'threads', 'batch_size', 'precision', 'device', 'epochs',
               'accumulate', 'seed', 'validation_sha256', 'platform', 'kraken_version', 'available_cpus', 'hostname', 'lock_sha256', 'optimizer', 'torch_compile', 'height', 'max_width')
     for row in rows:
-        groups[tuple(row[x] for x in fields)].append(row)
+        groups[tuple(row[x] for x in fields) + (row['memory_measurement'],)].append(row)
     for key, ylabel, divisor in METRICS:
         fig, ax = plt.subplots(figsize=(10, 6), layout='constrained')
         for config, records in groups.items():
@@ -41,7 +44,7 @@ def plot_training(rows, output):
             ax.errorbar([x[0] / 2**20 for x in ordered], [mean(by_size[x]) for x in ordered],
                         yerr=[stdev(by_size[x]) if len(by_size[x]) > 1 else 0 for x in ordered],
                         marker='o', capsize=3,
-                        label=f'w={config[0]}, t={config[1]}, b={config[2]}, {config[3]}, {config[4]}, {config[-4]}, compile={config[-3]}, shape={config[-2]}×{config[-1]}')
+                        label=f'w={config[0]}, t={config[1]}, b={config[2]}, {config[3]}, {config[4]}, {config[-5]}, compile={config[-4]}, shape={config[-3]}×{config[-2]}, {config[-1]}')
         ax.set(xlabel='Compiled training dataset (MiB)', ylabel=ylabel,
                title='PP-OCRv6 tiny • mean ± sample standard deviation')
         ax.grid(alpha=0.2)
@@ -54,7 +57,7 @@ def plot_training(rows, output):
     for r in rows:
         key = tuple(r[x] for x in ('pages', 'dataset_sha256', 'validation_sha256', 'device',
                                   'precision', 'epochs', 'accumulate', 'seed', 'platform',
-                                  'kraken_version', 'available_cpus', 'hostname', 'lock_sha256', 'optimizer', 'torch_compile', 'height', 'max_width'))
+                                  'kraken_version', 'available_cpus', 'hostname', 'lock_sha256', 'optimizer', 'torch_compile', 'height', 'max_width', 'memory_measurement'))
         panels[key].append(r)
     for index, (conditions, records) in enumerate(panels.items()):
         configurations = defaultdict(list)
@@ -70,7 +73,7 @@ def plot_training(rows, output):
             ax.set_xticks(range(len(keys)), [f'{w}/{t}/{b}' for w, t, b in keys], rotation=60)
             ax.grid(axis='y', alpha=.2)
         axes[-1].set_xlabel('Workers / threads / batch size')
-        fig.suptitle(f'{conditions[0]} training pages • {conditions[3]} • {conditions[4]} • {conditions[5]} epochs • {conditions[-2]}×{conditions[-1]} px')
+        fig.suptitle(f'{conditions[0]} training pages • {conditions[3]} • {conditions[4]} • {conditions[5]} epochs • {conditions[-3]}×{conditions[-2]} px • {conditions[-1]}')
         for ext in ('png', 'svg'):
             fig.savefig(output / f'settings-{conditions[0]}pages-{index}.{ext}', dpi=160)
         plt.close(fig)
@@ -91,7 +94,7 @@ def main():
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
-    successful = [r for r in rows if r.get('returncode') == 0 and not r.get('interrupted') and r.get('kind') == 'train']
+    successful = [r for r in rows if r.get('returncode') == 0 and not r.get('interrupted') and not r.get('measurement_error') and not r.get('termination_reason') and r.get('kind') == 'train']
     print(f'{len(successful)} successful training runs; {len(rows)-len(successful)} excluded from plots')
     if not successful:
         p.error('No successful training runs; results.csv contains failures for inspection')
@@ -104,10 +107,10 @@ def main():
         data.sort(key=lambda pair: pair[0]['pages'])
         fig, axes = plt.subplots(1, 3, figsize=(13, 4), layout='constrained')
         for ax, (metric, label, divisor) in zip(axes, METRICS):
-            ax.plot([r['bytes'] / 2**20 for r, _ in data], [s[metric] / divisor for _, s in data], 'o-')
+            ax.plot([r['bytes'] / 2**20 for r, _ in data], [(s.get('peak_memory_bytes', s.get('peak_rss_bytes')) if metric == 'peak_memory_bytes' else s[metric]) / divisor for _, s in data], 'o-')
             ax.set(xlabel='Compiled dataset (MiB)', ylabel=label)
             ax.grid(alpha=.2)
-        fig.suptitle('Dataset compilation resources')
+        fig.suptitle('Dataset compilation resources • ' + ', '.join(sorted({s.get('memory_measurement', 'sampled RSS') for _, s in data})))
         for ext in ('png', 'svg'):
             fig.savefig(args.output / f'compilation.{ext}', dpi=160)
         plt.close(fig)

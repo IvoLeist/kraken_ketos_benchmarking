@@ -83,7 +83,7 @@ def main():
         run_dir = args.output / 'compile-runs' / f'{name}-{uuid.uuid4().hex[:10]}'
         result = measure(command, run_dir, dict(kind='compile', pages=len(pairs), dataset=name,
                          workers=args.workers, threads=args.threads, seed=args.seed))
-        if result['returncode'] or not temporary.is_file():
+        if result['returncode'] != 0 or result.get('termination_reason') or not temporary.is_file():
             raise RuntimeError(f'Compilation failed; see {run_dir / "process.log"}')
         with pa.memory_map(str(temporary), 'r') as stream:
             reader = pa.ipc.open_file(stream)

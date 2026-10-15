@@ -18,17 +18,22 @@ jobs:
           context: .
           load: true
           push: false
-          tags: ketos-benchmarking:ci
+          tags: ketos-benchmarking:local
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Harness tests
-        run: docker run --rm ketos-benchmarking:ci make test
+      - name: Prepare Compose storage
+        run: |
+          mkdir -p training_data artifacts/docker .docker-cache site
+          echo "LOCAL_UID=$(id -u)" >> "$GITHUB_ENV"
+          echo "LOCAL_GID=$(id -g)" >> "$GITHUB_ENV"
+      - name: Harness and real BenchExec accounting tests
+        run: docker compose run --rm -e BENCHEXEC_INTEGRATION=1 benchmark make test
       - name: Synthetic end-to-end training check
-        run: docker run --rm --shm-size=2g ketos-benchmarking:ci make integration-test
+        run: docker compose run --rm benchmark make integration-test
       - name: Command and documentation checks
         run: |
-          docker run --rm ketos-benchmarking:ci make dry-run SIZES=5 WORKERS=0 THREADS=1 BATCH_SIZES=4
-          docker run --rm ketos-benchmarking:ci make docs
+          docker compose run --rm benchmark make dry-run SIZES=5 WORKERS=0 THREADS=1 BATCH_SIZES=4
+          docker compose run --rm benchmark make docs
       - name: Compose configuration
         run: |
           docker compose config --quiet

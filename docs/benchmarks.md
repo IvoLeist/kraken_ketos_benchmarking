@@ -2,7 +2,25 @@
 
 ## Environment
 
-Install `uv` and GNU Make, then run `make setup`. This creates a Python 3.12 virtual environment and installs the locked dependencies. Kraken 7.1.1 comes from PyPI; Linux CPU PyTorch wheels come from the official PyTorch index. Run on Linux or macOS (WSL on Windows).
+Install `uv` and GNU Make, then run `make setup`. This creates a Python 3.12 virtual environment and installs the locked dependencies. Kraken 7.1.1 comes from PyPI; Linux CPU PyTorch wheels come from the official PyTorch index. Measured runs require Linux with writable, delegated CPU and memory cgroups (prefer cgroups v2 and Linux 5.19 or newer).
+
+## BenchExec setup
+
+This branch uses BenchExec's `RunExecutor` for compilation and training. It preserves the existing matrix and JSON/CSV plotting workflow. Filesystem namespaces are disabled so datasets, checkpoints and logs keep their existing paths; this does not provide filesystem isolation. CPU/memory accounting and descendant cleanup use cgroups. Missing controllers cause a setup error rather than approximate measurements.
+
+Follow the [official cgroup setup guide](https://github.com/sosy-lab/benchexec/blob/main/doc/INSTALL.md#setting-up-cgroups). On a configured systemd host, run commands in a delegated scope:
+
+```sh
+systemd-run --user --scope --slice=benchexec -p Delegate=yes .venv/bin/python -m benchexec.check_cgroups
+make datasets BENCHEXEC_PREFIX='systemd-run --user --scope --slice=benchexec -p Delegate=yes'
+make smoke BENCHEXEC_PREFIX='systemd-run --user --scope --slice=benchexec -p Delegate=yes'
+make benchmark BENCHEXEC_PREFIX='systemd-run --user --scope --slice=benchexec -p Delegate=yes'
+systemd-run --user --scope --slice=benchexec -p Delegate=yes env BENCHEXEC_INTEGRATION=1 .venv/bin/python -m pytest -q
+```
+
+The prefix wraps each measured Python process, not Make itself: BenchExec needs its own scope without a waiting parent process. The same `BENCHEXEC_PREFIX` works with `make integration-test`.
+
+If delegation is unavailable, the host administrator must configure it as described upstream. Installation of the Python package alone is insufficient. Docker Compose configures the container's private cgroup hierarchy automatically; see the [Docker workflow](docker.md) for host requirements and its privileged startup configuration. Dry runs, unit tests, docs and plotting do not require cgroups.
 
 ## Data
 
@@ -12,7 +30,7 @@ Place JPG images and corresponding PAGE XML under `training_data/`. Each XML's `
 make datasets SIZES='5 10 15' VALIDATION_PAGES=2 SEED=42
 ```
 
-Selection checks for missing images, duplicate image references and missing transcriptions. Two distinct pages are held out. Each larger training subset contains the smaller subset. `artifacts/datasets/datasets.json` records provenance, file hashes and byte sizes. Compilation logs and sampled resources are retained under `compile-runs/`. Recompilation invalidates old metadata until all subsets succeed.
+Selection checks for missing images, duplicate image references and missing transcriptions. Two distinct pages are held out. Each larger training subset contains the smaller subset. `artifacts/datasets/datasets.json` records provenance, file hashes and byte sizes. Compilation logs and BenchExec measurements are retained under `compile-runs/`. Recompilation invalidates old metadata until all subsets succeed.
 
 ## Experiments
 
@@ -29,7 +47,7 @@ make benchmark REPEATS=3 RUNS=artifacts/repeated
 make plots RUNS=artifacts/repeated PLOTS=artifacts/repeated-plots
 ```
 
-TorchDynamo compilation is disabled by default, matching Galaxy. The runner explicitly sets `TORCHDYNAMO_DISABLE=1` and `TORCH_COMPILE_DISABLE=1` for every training process, overriding inherited environment values. The second flag is used by the pinned PyTorch version. Both values are recorded with each run. Explicitly setting `TORCH_COMPILE=enabled` (or `--torch-compile enabled`) sets both flags to 0 for a separate compilation experiment. The smoke target always disables compilation. `HEIGHT` and `MAX_WIDTH` default to 96 and 2560 pixels for the matrix. Smaller maximum widths reduce the cost of the auxiliary training head but can change which lines are accepted. `PRECISIONS`, `DEVICE`, `ACCUMULATE`, `EPOCHS`, `SEED` and `INTERVAL` control additional dimensions. `DATA_DIR`, `DATASETS`, `RUNS` and `PLOTS` override paths. Use `COMPILE_WORKERS` and `COMPILE_THREADS` to change compilation concurrency.
+TorchDynamo compilation is disabled by default, matching Galaxy. The runner explicitly sets `TORCHDYNAMO_DISABLE=1` and `TORCH_COMPILE_DISABLE=1` for every training process, overriding inherited environment values. The second flag is used by the pinned PyTorch version. Both values are recorded with each run. Explicitly setting `TORCH_COMPILE=enabled` (or `--torch-compile enabled`) sets both flags to 0 for a separate compilation experiment. The smoke target always disables compilation. `HEIGHT` and `MAX_WIDTH` default to 96 and 2560 pixels for the matrix. Smaller maximum widths reduce the cost of the auxiliary training head but can change which lines are accepted. `PRECISIONS`, `DEVICE`, `ACCUMULATE`, `EPOCHS` and `SEED` control additional dimensions. `DATA_DIR`, `DATASETS`, `RUNS` and `PLOTS` override paths. Use `COMPILE_WORKERS` and `COMPILE_THREADS` to change compilation concurrency.
 
 The harness selects AdamW explicitly. Use `OPTIMIZER=AdamW+Muon` to select Kraken’s PP-OCRv6 default instead; it can be costly on CPUs. Optimizer choice is recorded and kept separate in plots. Runs use fixed epochs, no augmentation, a constant learning rate schedule and no warmup. Model initialization and training seed stay fixed across repeats. Numerical and loader scheduling can still vary. Matrix order is shuffled reproducibly; runs are serial to avoid competing benchmark processes.
 

@@ -8,7 +8,7 @@ make plots
 
 The output in `artifacts/plots/` includes a CSV of every run, plots of compiled dataset size against runtime, RAM and CPU utilization, and per-dataset comparisons of workers/threads/batch size. A separate chart covers dataset compilation. PNG and SVG formats are generated.
 
-Repeated equivalent runs are summarized by mean and sample standard deviation. Failed and interrupted runs remain in the CSV but are omitted from charts. Per-run `samples.csv` retains the time series for more detailed analysis. Every run has its own log, command record and summary.
+Repeated equivalent runs are summarized by mean and sample standard deviation. Failed and interrupted runs remain in the CSV but are omitted from charts. Per-run `benchexec.json` retains the raw execution measurements. This branch does not collect resource time series. Peak memory uses cgroup accounting, with legacy sampled RSS kept in separate plot groups. Every run has its own log, command record and summary.
 
 ## Publish selected results
 

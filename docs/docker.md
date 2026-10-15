@@ -1,10 +1,12 @@
 # Run the suite with Docker
 
-The CPU image contains Python 3.12, the exact `uv.lock` environment, Kraken, plotting tools, pytest, Zensical, and the C++ compiler required by TorchInductor. A host Python installation is unnecessary. Docker Engine with Docker Compose is required; Docker Desktop supplies both on macOS and Windows. Linux x86-64 is the primary benchmark platform. Do not compare native runs with emulated containers as equivalent hardware.
+The benchmark service configures BenchExec automatically on a Linux Docker Engine with **cgroups v2**, CPU/memory controllers, and a kernel supporting peak memory accounting (Linux 5.19 or newer). No host Python or manual cgroup setup is needed. Docker Desktop, rootless Docker and cgroups v1 are not validated by this setup.
+
+The CPU image contains Python 3.12, the exact `uv.lock` environment, Kraken, plotting tools, pytest, Zensical, and the C++ compiler required by TorchInductor. A host Python installation is unnecessary. Docker Engine with Docker Compose is required. Linux x86-64 is the primary benchmark platform. Do not compare native runs with emulated containers as equivalent hardware.
 
 ## Build and prepare storage
 
-Run these commands from the repository root in a POSIX shell (use WSL on Windows):
+Run these commands from the repository root on the Linux Docker host:
 
 ```sh
 mkdir -p training_data artifacts/docker .docker-cache site
@@ -14,9 +16,24 @@ export BENCHMARK_HOSTNAME="$(hostname)"
 docker compose build benchmark
 ```
 
-Supply at least 17 JPG/PAGE XML pairs in `training_data/`. The default runtime user is UID/GID 1000; `.env.example` lists optional overrides. To persist settings, copy it to `.env` and edit the values. Create any custom host directories before starting containers. Missing bind-mount sources fail rather than being silently created as root.
+Supply at least 17 JPG/PAGE XML pairs in `training_data/`. The benchmark entrypoint briefly starts as root to configure cgroups, then runs all commands as UID/GID 1000 by default; `.env.example` lists optional overrides. To persist settings, copy it to `.env` and edit the values. Create any custom host directories before starting containers. Missing bind-mount sources fail rather than being silently created as root.
 
 The image build excludes local data, results, credentials, caches and the host virtual environment. Dependencies are installed during the build with `uv sync --locked`; runtime commands do not need to install packages. Rebuild after changing code, dependencies or documentation. Base-image tags can receive updates; retain the built image ID alongside published measurements if exact image reproduction matters.
+
+## Cgroup setup and privileges
+
+The benchmark service uses `privileged: true` to obtain a writable cgroup mount, as in the [upstream Docker setup](https://github.com/sosy-lab/benchexec/blob/main/doc/benchexec-in-container.md). It explicitly uses a **private cgroup namespace** and does not bind-mount the host cgroup hierarchy or Docker socket. The entrypoint places wrapper processes in `/init`, enables the available controllers, and delegates `/benchexec` to `LOCAL_UID:LOCAL_GID`. BenchExec automatically discovers that subtree, so ordinary Make commands work, including repeated compilation runs and `make all`.
+
+The entrypoint then switches to the configured non-root user, clears supplemental groups and all capability sets, and enables `no-new-privileges` before starting Tini and the command. Zero UID/GID values are rejected. Docker privileged mode still relaxes device and security-policy isolation; use this service only with trusted benchmark code. The documentation service retains the normal non-root, unprivileged configuration. Do not override the benchmark entrypoint or set `cgroup: host`.
+
+Check the runtime and accounting without training:
+
+```sh
+docker compose run --rm benchmark .venv/bin/python -m benchexec.check_cgroups
+docker compose run --rm -e BENCHEXEC_INTEGRATION=1 benchmark make test
+```
+
+A `Container cgroup setup failed` message generally means the engine does not expose writable cgroups v2 or the required controllers. Check `docker info` on the Docker host. The startup check does not change host configuration or fall back to approximate measurements. Plain `docker run` retains the unprivileged image default and can run docs, plots or unit tests; use Compose for measured runs.
 
 ## Compile, train, and plot
 
@@ -101,7 +118,7 @@ Start with `SIZES=5 WORKERS=0 THREADS=1 BATCH_SIZES=4` if checking a new dataset
 
 These are per-container limits: run only one benchmark container at a time. They constrain runtime containers, not image builds or native Python commands. They cannot guarantee VM stability if unrelated workloads exhaust resources. Check free disk space as checkpoints and files in `artifacts/` and caches are not capped by these limits; Docker log rotation does not rotate benchmark output files. Retain the override with your results and use a separate results directory when changing limits.
 
-CPU utilization is normalized to affinity-visible logical CPUs, so CPU pinning with `cpuset` is reflected in the denominator. Cgroup CPU quotas (`cpus`) and Docker Desktop VM limits may be narrower and are not used in that denominator. Report the container limits and host/VM configuration with results. Process RSS is not the entire container's cgroup memory usage; container OOM termination can prevent final summaries from being written.
+CPU utilization is normalized to affinity-visible logical CPUs, so CPU pinning with `cpuset` is reflected in the denominator. Cgroup CPU quotas (`cpus`) and Docker Desktop VM limits may be narrower and are not used in that denominator. Report the container limits and host/VM configuration with results. Per-run cgroup memory is not the entire container's memory usage; container OOM termination can prevent final summaries from being written.
 
 For a detached job:
 
